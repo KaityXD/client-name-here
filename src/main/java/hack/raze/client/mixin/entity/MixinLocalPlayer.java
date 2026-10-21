@@ -161,6 +161,21 @@ public abstract class MixinLocalPlayer extends AbstractClientPlayer {
         }
     }
 
+    @Inject(method = "aiStep", at = @At("HEAD"))
+    public void raze$onMotionPre(CallbackInfo ci) {
+        if (Raze.isDestroyed) return;
+        float enforced = MathProt.getEnforcedPitch(this.getXRot());
+        EventMotion event = new EventMotion.Pre(this.getX(), this.getY(), this.getZ(), this.onGround(), this.getYRot(), enforced);
+        event.call();
+    }
+
+    @Inject(method = "aiStep", at = @At("RETURN"))
+    public void raze$onMotionPost(CallbackInfo ci) {
+        if (Raze.isDestroyed) return;
+        EventMotion event = new EventMotion.Post(this.getX(), this.getY(), this.getZ(), this.onGround(), this.getYRot(), this.getXRot());
+        event.call();
+    }
+
     @ModifyExpressionValue(
         method = "aiStep",
         at = @At(

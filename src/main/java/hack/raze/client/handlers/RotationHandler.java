@@ -1,16 +1,12 @@
 package hack.raze.client.handlers;
 
 import hack.raze.client.auth.MathProt;
-import hack.raze.client.mixin.entity.MixinEntity;
-import hack.raze.client.mixin.entity.MixinFireworkRocketEntity;
-import hack.raze.client.mixin.entity.MixinItem;
-import hack.raze.client.mixin.entity.MixinLivingEntity;
-import hack.raze.client.mixin.entity.MixinPlayer;
 import lombok.Getter;
 import lombok.Setter;
-import net.minecraft.client.multiplayer.MultiPlayerGameMode;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
+
+import static hack.raze.client.utils.Imports.mc;
 /**
  * Yes this is important.
  * Likely not finished.
@@ -59,6 +55,15 @@ public class RotationHandler {
     @Setter
     private static boolean hasSilentRotation = false;
 
+    // Smoothed render rotations (respect-style: lerps toward the sent rotation so
+    // the third person model glides instead of stepping)
+    @Getter
+    private static float renderYaw;
+    @Getter
+    private static float renderPitch;
+    private static boolean renderInitialized;
+    private static long lastRenderNano;
+
     // Credit to Nami Client for helping me figure this out (the weird AimModulo360
     // flag)
 
@@ -91,11 +96,37 @@ public class RotationHandler {
         serverYaw = yaw;
         float enforcedPitch = MathProt.getEnforcedPitch(pitch);
         serverPitch = Mth.clamp(enforcedPitch, -90f, 90f);
+        advanceRenderRotations(serverYaw, serverPitch);
+    }
+
+    /**
+     * Smooth the render-side silent rotation toward the latest sent rotation.
+     * Equivalent of respect's 0.4-per-tick render lerp, normalized per frame.
+     */
+    public static void advanceRenderRotations(float targetYaw, float targetPitch) {
+        long n = System.nanoTime();
+        if (!renderInitialized) {
+            renderYaw = mc.player != null ? mc.player.getYRot() : targetYaw;
+            renderPitch = mc.player != null ? mc.player.getXRot() : targetPitch;
+            renderInitialized = true;
+            lastRenderNano = n;
+            return;
+        }
+
+        float dt = (n - lastRenderNano) / 1.0E9F;
+        lastRenderNano = n;
+        if (dt > 0.25F) dt = 0.25F;
+        if (dt < 0.001F) dt = 0.001F;
+
+        float f = 1.0F - (float) Math.pow(0.6D, dt / 0.05D);
+        renderYaw += Mth.wrapDegrees(targetYaw - renderYaw) * f;
+        renderPitch += (targetPitch - renderPitch) * f;
     }
 
     public static void reset() {
         serverDeltaYaw = 0f;
         hasSilentRotation = false;
+        renderInitialized = false;
     }
 
     public static void syncToPlayer(float playerYaw, float playerPitch) {

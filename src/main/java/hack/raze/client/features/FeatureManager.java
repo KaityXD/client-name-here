@@ -3,8 +3,11 @@ package hack.raze.client.features;
 
 import hack.raze.client.Raze;
 import hack.raze.client.event.EventManager;
+import hack.raze.client.features.impl.combat.AimAssist;
+import hack.raze.client.features.impl.combat.KillAura;
 import hack.raze.client.features.impl.combat.MaceSwap;
 import hack.raze.client.features.impl.combat.ShieldStun;
+import hack.raze.client.features.impl.movement.StrafeFix;
 import hack.raze.client.features.impl.misc.ClickGUI;
 import lombok.Getter;
 
@@ -30,6 +33,9 @@ public class FeatureManager {
         features.add(new ClickGUI());
         features.add(new MaceSwap());
         features.add(new ShieldStun());
+        features.add(new AimAssist());
+        features.add(new KillAura());
+        features.add(new StrafeFix());
 
         features.forEach(Feature::initSettings);
         features.sort((a, b) -> compareCharSequenceIgnoreCase(a.getName(), b.getName()));

@@ -28,10 +28,11 @@ public class MixinAvatarRenderer {
         if (perspective.isFirstPerson()) return;
         if (!RotationHandler.isHasSilentRotation()) return;
 
-        float serverYaw = RotationHandler.getServerYaw();
-        float serverPitch = RotationHandler.getServerPitch();
+        float serverYaw = RotationHandler.getRenderYaw();
+        float serverPitch = RotationHandler.getRenderPitch();
 
         state.bodyRot = serverYaw;
+        state.yRot = 0.0F;
         state.xRot = Mth.clamp(serverPitch, -90.0f, 90.0f);
     }
 
