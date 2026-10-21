@@ -202,6 +202,14 @@ public final class SwapStateManager extends Handler {
 
             stack.pop();
             if (state.restoreOnEnd) {
+                if (mc.player.getInventory().getSelectedSlot() != state.targetSlot) {
+                    while (!stack.isEmpty()) {
+                        runEnd(stack.pop());
+                    }
+                    runEnd(state);
+                    return;
+                }
+
                 restoreRootAndClear(state);
                 runEnd(state);
                 return;

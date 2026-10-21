@@ -24,7 +24,8 @@ import net.minecraft.world.item.enchantment.Enchantments;
 public class MaceSwap extends Feature {
 
     private final MultiModeSetting w = new MultiModeSetting("Weapon Types", "Sword", "Axe", "Spear", "Other");
-    private final IntSetting rd = new IntSetting("Restore Delay", 0, 0, 10, " ticks");
+    private final BoolSetting rs = new BoolSetting("Restore", true);
+    private final IntSetting rd = new IntSetting("Restore Delay", 0, 0, 10, " ticks", o -> rs.getValue());
     private final BoolSetting bg = new BoolSetting("Breach On Ground", false);
     private final FloatSetting dt = new FloatSetting("Density Threshold", 1.5F, 0.0F, 10.0F, 0.1F);
     private final BoolSetting so = new BoolSetting("Smash Only", false);
@@ -44,10 +45,12 @@ public class MaceSwap extends Feature {
         if (mc.player.tickCount == lt) return;
         if (!wc()) return;
         if (SwapStateManager.isActive(this)) return;
+        if (ShieldStun.busy()) return;
 
         LivingEntity t = PlayerUtils.getManualSelectTarget();
         if (t == null) return;
         if (t == mc.player || !t.isAlive()) return;
+        if (ShieldStun.owns(t) || am(t)) return;
 
         if (!sa(t)) return;
 
@@ -60,10 +63,12 @@ public class MaceSwap extends Feature {
         if (mc.player.tickCount == lt) return;
         if (!wc()) return;
         if (SwapStateManager.isActive(this)) return;
+        if (ShieldStun.busy()) return;
 
         Entity r = e.getTarget();
         if (!(r instanceof LivingEntity t)) return;
         if (t == mc.player || !t.isAlive()) return;
+        if (ShieldStun.owns(t) || am(t)) return;
 
         if (!sa(t)) return;
 
@@ -84,7 +89,11 @@ public class MaceSwap extends Feature {
 
         lt = mc.player.tickCount;
 
-        SwapStateManager.swapTo(this, m, false, rd.getValue() + 1);
+        if (rs.getValue()) {
+            SwapStateManager.swapTo(this, m, false, rd.getValue() + 1);
+        } else {
+            InventoryUtils.setInvSlot(m);
+        }
         an(t);
         return true;
     }
@@ -108,11 +117,25 @@ public class MaceSwap extends Feature {
         return InventoryUtils.isSword(i) || i == Items.COPPER_SWORD;
     }
 
+    private boolean am(LivingEntity t) {
+        return mc.player.getMainHandItem().getItem() instanceof AxeItem && ShieldStun.blocking(t);
+    }
+
+    public int maceForSmash() {
+        if (!isEnabled() || isNull()) return -1;
+        int m = fm();
+        if (m == -1) return -1;
+        if (m == SwapStateManager.getSelectedSlot()) return -1;
+        return m;
+    }
+
     private int fm() {
         boolean d = mc.player.fallDistance >= dt.getValue();
         if (!d && bg.getValue()) {
             return InventoryUtils.findMaceWithEnchantmentInHotbar(Enchantments.BREACH, false);
         }
+
+        if (so.getValue() && !sm()) return -1;
 
         int p = d
                 ? InventoryUtils.findMaceWithEnchantmentInHotbar(Enchantments.DENSITY, false)

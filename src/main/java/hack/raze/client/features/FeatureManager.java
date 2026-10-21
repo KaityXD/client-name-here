@@ -4,6 +4,7 @@ package hack.raze.client.features;
 import hack.raze.client.Raze;
 import hack.raze.client.event.EventManager;
 import hack.raze.client.features.impl.combat.MaceSwap;
+import hack.raze.client.features.impl.combat.ShieldStun;
 import hack.raze.client.features.impl.misc.ClickGUI;
 import lombok.Getter;
 
@@ -28,6 +29,7 @@ public class FeatureManager {
         //? if !auth {
         features.add(new ClickGUI());
         features.add(new MaceSwap());
+        features.add(new ShieldStun());
 
         features.forEach(Feature::initSettings);
         features.sort((a, b) -> compareCharSequenceIgnoreCase(a.getName(), b.getName()));
