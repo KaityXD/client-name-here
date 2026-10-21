@@ -6,11 +6,15 @@ on:
   pull_request:
     branches: [ "main", "latest" ]
 
+permissions:
+  contents: write
+
+env:
+  VERSIONS: "1.21.11 26.1 26.1.1 26.1.2 26.2-snapshot-2"
+
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
 
     steps:
       - uses: actions/checkout@v4
@@ -25,4 +29,53 @@ jobs:
         uses: gradle/actions/setup-gradle@af1da67850ed9a4cedd57bfd976089dd991e2582 # v4.0.0
 
       - name: Build with Gradle Wrapper
-        run: ./gradlew build
+        run: |
+          chmod +x gradlew
+          for v in $VERSIONS; do
+            ./gradlew "$v:build"
+          done
+
+      - name: Collect jars
+        run: |
+          mkdir -p artifacts
+          for v in $VERSIONS; do
+            cp "versions/$v/build/libs/"raze-mc*-"$v"-*.jar artifacts/ 2>/dev/null || true
+          done
+          ls -la artifacts/
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: raze-jars
+          path: artifacts/*.jar
+          if-no-files-found: warn
+
+      # Nightly: one tag + prerelease per push
+      - name: Create nightly release
+        if: github.event_name == 'push'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="nightly-${GITHUB_RUN_NUMBER}"
+          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$TAG" artifacts/*.jar \
+            --title "Nightly Build #${GITHUB_RUN_NUMBER}" \
+            --notes "Auto nightly from commit ${GITHUB_SHA}" \
+            --prerelease
+
+      # Archive: refresh the mc<version> tags + releases with the latest jar of each
+      - name: Archive releases
+        if: github.event_name == 'push'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for v in $VERSIONS; do
+            TAG="mc$v"
+            JAR=$(ls "versions/$v/build/libs/"raze-mc"$v"-*.jar 2>/dev/null | grep -v sources | head -1)
+            [ -n "$JAR" ] || continue
+            gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+            gh release create "$TAG" "$JAR" \
+              --title "Archive — Minecraft $v" \
+              --notes "Archived build for MC $v (commit ${GITHUB_SHA})" \
+              --prerelease
+          done

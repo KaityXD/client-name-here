@@ -3,7 +3,6 @@
 build/
 buildSrc/.gradle/
 buildSrc/build/
-!gradle/wrapper/gradle-wrapper.jar
 
 # Compiled / packaged output
 *.class
@@ -11,6 +10,9 @@ buildSrc/build/
 *.war
 *.nar
 *.ear
+
+# But always ship the Gradle wrapper (needed for ./gradlew)
+!gradle/wrapper/gradle-wrapper.jar
 
 # Packages / archives
 *.zip
