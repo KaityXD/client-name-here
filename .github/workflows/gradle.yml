@@ -38,8 +38,12 @@ jobs:
       - name: Collect jars
         run: |
           mkdir -p artifacts
+          shopt -s nullglob
           for v in $VERSIONS; do
-            cp "versions/$v/build/libs/"raze-mc*-"$v"-*.jar artifacts/ 2>/dev/null || true
+            for j in "versions/$v/build/libs/"raze-mc"$v"-*.jar; do
+              case "$j" in *-sources.jar) continue ;; esac
+              cp "$j" artifacts/
+            done
           done
           ls -la artifacts/
 
@@ -48,7 +52,7 @@ jobs:
         with:
           name: raze-jars
           path: artifacts/*.jar
-          if-no-files-found: warn
+          if-no-files-found: error
 
       # Nightly: one tag + prerelease per push
       - name: Create nightly release
@@ -56,9 +60,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          files=$(ls artifacts/*.jar 2>/dev/null || true)
+          [ -n "$files" ] || { echo "No jars built"; exit 1; }
           TAG="nightly-${GITHUB_RUN_NUMBER}"
           gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
-          gh release create "$TAG" artifacts/*.jar \
+          gh release create "$TAG" $files \
             --title "Nightly Build #${GITHUB_RUN_NUMBER}" \
             --notes "Auto nightly from commit ${GITHUB_SHA}" \
             --prerelease
