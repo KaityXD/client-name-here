@@ -1,0 +1,27 @@
+package hack.raze.client.mixin.render.endcrystalrenderer;
+
+//? if <26.1 {
+import com.mojang.blaze3d.vertex.PoseStack;
+import net.minecraft.client.renderer.SubmitNodeCollector;
+import net.minecraft.client.renderer.entity.EndCrystalRenderer;
+import net.minecraft.client.renderer.entity.state.EndCrystalRenderState;
+import net.minecraft.client.renderer.state.CameraRenderState;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+@Mixin(EndCrystalRenderer.class)
+public class MixinEndCrystalRenderer_1_21_11 {
+
+    @Inject(
+            method = "submit(Lnet/minecraft/client/renderer/entity/state/EndCrystalRenderState;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;Lnet/minecraft/client/renderer/state/CameraRenderState;)V",
+            at = @At("HEAD")
+    )
+    public void raze$render(EndCrystalRenderState state, PoseStack matrices, SubmitNodeCollector queue, CameraRenderState camera, CallbackInfo ci) {
+    }
+}
+//?} else {
+/*public final class MixinEndCrystalRenderer_1_21_11 {
+}
+*///?}

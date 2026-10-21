@@ -1,0 +1,94 @@
+# Gradle
+.gradle/
+build/
+buildSrc/.gradle/
+buildSrc/build/
+!gradle/wrapper/gradle-wrapper.jar
+
+# Compiled / packaged output
+*.class
+*.jar
+*.war
+*.nar
+*.ear
+
+# Packages / archives
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# Logs, crash reports, heap dumps
+*.log
+logs/
+crash-reports/
+hs_err_pid*
+replay_pid*
+*.hprof
+
+# IDE / editor
+.idea/
+*.iml
+.vscode/
+*.swp
+*~
+settings.json
+
+# OS cruft
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Stonecutter versioned subprojects: keep sources config, drop build junk
+/versions/*
+!/versions/*/
+/versions/*/build
+/versions/*/bin
+/versions/*/.gradle
+/versions/*/.settings
+/versions/*/.project
+/versions/*/.classpath
+/versions/*/.factorypath
+/versions/*/logs
+/versions/*/run
+!/versions/*/gradle.properties
+!/versions/*/raze.accesswidener
+
+# Dev environment (client run configs, saves, accounts)
+/run
+command_history.txt
+usercache.json
+options.txt
+
+# Auth artifacts (regenerated at build/run time)
+/features.json
+
+# Secrets
+.env
+*.env
+
+# AI agent tooling
+.cursor/
+.cursorrules
+.cursorindexingignore
+.windsurf/
+.windsurfrules
+.codeium/
+.opencode/
+.cline/
+.clinerules
+.roo/
+.rooignore
+.continue/
+.aider*
+.github/copilot-instructions.md
+.amazonq/
+.kiro/
+.augment/
+.codex/
+.openhands/
+/.docs/
+/.fontgen/
+/.claude
+CLAUDE.md
+opencode.json
