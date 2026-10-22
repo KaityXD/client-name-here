@@ -10,6 +10,8 @@ jobs:
           fetch-depth: 0
 
       - name: Send Commit to Discord
+        env:
+          DISCORD_WEBHOOK: '${{ secrets.DISCORD_WEBHOOK }}'
         run: |
           python <<'PY' > discord-payload.json
           import json
@@ -125,7 +127,27 @@ jobs:
           print(json.dumps(payload))
           PY
 
-          curl -H "Content-Type: application/json" \
+          if [ -z "${DISCORD_WEBHOOK:-}" ]; then
+            echo "::error::The DISCORD_WEBHOOK Actions secret is missing. Add a valid Discord webhook URL in repository Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+
+          DISCORD_WEBHOOK="$(printf '%s' "$DISCORD_WEBHOOK" | tr -d '\r\n')"
+          export DISCORD_WEBHOOK
+          python - <<'PY'
+          import os
+          import re
+          import sys
+          from urllib.parse import urlsplit
+
+          url = os.environ["DISCORD_WEBHOOK"]
+          parsed = urlsplit(url)
+          if (parsed.scheme != "https"
+                  or parsed.hostname not in {"discord.com", "discordapp.com"}
+                  or not re.fullmatch(r"/api/webhooks/\d+/[^/]+/?", parsed.path)):
+              sys.exit("::error::DISCORD_WEBHOOK must be a valid Discord webhook URL (https://discord.com/api/webhooks/<id>/<token>).")
+          PY
+          curl --fail-with-body --silent --show-error -H "Content-Type: application/json" \
                -X POST \
                -d @discord-payload.json \
-               "${{ secrets.DISCORD_WEBHOOK }}"
+               "$DISCORD_WEBHOOK"
