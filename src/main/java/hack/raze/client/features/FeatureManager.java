@@ -4,6 +4,10 @@ package hack.raze.client.features;
 import hack.raze.client.Raze;
 import hack.raze.client.event.EventManager;
 import hack.raze.client.features.impl.combat.AimAssist;
+import hack.raze.client.features.impl.combat.AutoAnchor;
+import hack.raze.client.features.impl.combat.CrystalAura;
+import hack.raze.client.features.impl.combat.SpearLungeModule;
+import hack.raze.client.features.impl.combat.TriggerBot;
 import hack.raze.client.features.impl.combat.KillAura;
 import hack.raze.client.features.impl.combat.MaceSwap;
 import hack.raze.client.features.impl.combat.ShieldStun;
@@ -34,6 +38,10 @@ public class FeatureManager {
         features.add(new MaceSwap());
         features.add(new ShieldStun());
         features.add(new AimAssist());
+        features.add(new CrystalAura());
+        features.add(new AutoAnchor());
+        features.add(new SpearLungeModule());
+        features.add(new TriggerBot());
         features.add(new KillAura());
         features.add(new StrafeFix());
 
