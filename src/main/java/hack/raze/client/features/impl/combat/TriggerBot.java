@@ -1,51 +1,81 @@
 package hack.raze.client.features.impl.combat;
 
+import hack.raze.client.Raze;
 import hack.raze.client.event.EventSubscribe;
 import hack.raze.client.event.impl.EventHandleInput;
+import hack.raze.client.event.impl.EventPacketReceive;
 import hack.raze.client.features.Category;
 import hack.raze.client.features.Feature;
 import hack.raze.client.features.FeatureInfo;
-import hack.raze.client.features.settings.impl.BoolSetting;
-import hack.raze.client.features.settings.impl.IntSetting;
-import hack.raze.client.features.settings.impl.ItemPickerSetting;
-import hack.raze.client.features.settings.impl.ModeSetting;
-import hack.raze.client.features.settings.impl.RangeSetting;
+import hack.raze.client.features.settings.impl.*;
 import hack.raze.client.handlers.InputHandler;
 import hack.raze.client.handlers.impl.HurtTickHandler;
 import hack.raze.client.utils.combat.CombatUtils;
 import hack.raze.client.utils.combat.TargetUtils;
 import hack.raze.client.utils.inventory.InventoryUtils;
 import hack.raze.client.utils.math.TimerUtils;
-import net.minecraft.world.InteractionHand;
+import hack.raze.client.utils.player.PlayerIntersectionUtil;
+import hack.raze.client.utils.player.PlayerUtils;
+import hack.raze.client.utils.strings.Concat;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientboundPlayerPositionPacket;
+import net.minecraft.network.protocol.game.ClientboundRespawnPacket;
 import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.phys.EntityHitResult;
 import net.minecraft.world.phys.HitResult;
 
-/** Attacks valid entities under the crosshair using Raze's input events. */
-public final class TriggerBot extends Feature {
-    private final ModeSetting critMode = new ModeSetting("Crit Mode", "pCrit", "pCrit", "normal", "None");
-    private final BoolSetting requireSpaceToCrit = new BoolSetting("Crit only on space", false);
-    private final BoolSetting attackShieldedTargets = new BoolSetting("Attack Shields", true);
-    private final BoolSetting hurtTimeCheck = new BoolSetting("HurtTime Check", true);
-    private final ItemPickerSetting itemWhitelist = new ItemPickerSetting("Item Whitelist");
-    private final RangeSetting attackCooldown = new RangeSetting("Cooldown", 90, 100, 0, 100, 1);
-    private final RangeSetting critCooldown = new RangeSetting("Crit Cooldown", 70, 89, 0, 100, 1);
-    private final RangeSetting critRange = new RangeSetting("Crit Range", 1.0F, 2.2F, 0, 6, 0.1F);
-    private final IntSetting reactionDelay = new IntSetting("Reaction Delay", 0, 0, 500);
-    private final IntSetting attackDelay = new IntSetting("Attack Delay", 0, 0, 500);
-    private final BoolSetting requireClick = new BoolSetting("Require Attack Key", false);
-    private final BoolSetting clickSimulation = new BoolSetting("Click Simulation", false);
+public class TriggerBot extends Feature {
+    private static final CharSequence EMPTY = Concat.of();
+
+    private final ModeSetting critMode = new ModeSetting(
+            Concat.of("Crit Mode"),
+            Concat.of("pCrit"),
+            Concat.of("pCrit"),
+            Concat.of("normal"),
+            Concat.of("None")
+    );
+    private final BoolSetting requireSpaceToCrit = new BoolSetting(Concat.of("Crit only on space"), false);
+    private final BoolSetting attackShieldedTargets = new BoolSetting(Concat.of("Attack Shields"), true);
+    private final BoolSetting hurtTimeCheck = new BoolSetting(Concat.of("HurtTime Check"), true);
+    private final ItemPickerSetting itemWhitelist = new ItemPickerSetting(Concat.of("Item Whitelist"));
+    private final RangeSetting attackCooldown = new RangeSetting(Concat.of("Cooldown"), 90, 100, 0, 100, 1);
+    private final RangeSetting critCooldown = new RangeSetting(Concat.of("Crit Cooldown"), 70, 89, 0, 100, 1);
+    private final RangeSetting allowedCritRange = new RangeSetting(Concat.of("Crit Range"), 1.0f, 2.2f, 0f, 6f, 0.1f);
+    private final IntSetting reactionDelay = new IntSetting(Concat.of("Reaction Delay"), 0, 0, 500);
+    private final IntSetting attackDelay = new IntSetting(Concat.of("Attack Delay"), 0, 0, 500);
+    private final BoolSetting requireClick = new BoolSetting(Concat.of("Require Attack Key"), false);
+    private final BoolSetting unshield = new BoolSetting(Concat.of("Unshield"), true);
+    private final BoolSetting clickSimulation = new BoolSetting(Concat.of("Click Simulation"), false);
 
     private final TimerUtils reactionTimer = new TimerUtils();
     private final TimerUtils attackTimer = new TimerUtils();
-    private LivingEntity trackedTarget;
-    private int lastAttackTick = -1;
+    private final TimerUtils pSync = new TimerUtils();
+    
+    private boolean unblocked;
+    private boolean shouldReblockShield = false;
+    private boolean hasValidTarget = false;
+    private boolean shouldAttack = false;
+    
+    private long lastAttackTick = -1;
+    private LivingEntity targetToAttack = null;
 
     public TriggerBot() {
-        super(new FeatureInfo("TriggerBot", "Attacks a valid target when it is under your crosshair", Category.COMBAT));
+        super(new FeatureInfo(
+                Concat.of("Trigger Bot"),
+                Concat.of("Automatically attacks when aiming at targets"),
+                Category.COMBAT
+        ));
+    }
+
+    @Override
+    public CharSequence concat() {
+        if (critMode.is(Concat.of("None"))) {
+            return EMPTY;
+        }
+
+        return critMode.getValue();
     }
 
     @Override
@@ -53,77 +83,252 @@ public final class TriggerBot extends Feature {
         super.onEnable();
         reactionTimer.reset();
         attackTimer.reset();
-        trackedTarget = null;
+        pSync.reset();
+        unblocked = false;
+        shouldReblockShield = false;
+        hasValidTarget = false;
         lastAttackTick = -1;
+        shouldAttack = false;
+        targetToAttack = null;
     }
 
     @Override
-    public CharSequence concat() {
-        return critMode.is("None") ? "" : critMode.getValue();
+    public void onDisable() {
+        super.onDisable();
+        handleShieldReblock();
+        shouldAttack = false;
+        targetToAttack = null;
     }
 
     @EventSubscribe
-    private void onInput(EventHandleInput.Early event) {
-        if (isNull() || mc.gameMode == null) {
-            resetTarget();
+    private void onHandleInput(EventHandleInput.Early event) {
+        if (isNull()) {
+            return;
+        }
+        if (hack.raze.client.api.MinecraftCompat.getScreen() != null) {
             return;
         }
 
-        LivingEntity target = crosshairTarget();
-        if (target == null || !TargetUtils.isTargetAllowed(target) || TargetUtils.resolveTarget(target) != target) {
-            resetTarget();
+        performAttackChecks();
+
+        if (shouldAttack && targetToAttack != null) {
+            executeAttack(targetToAttack);
+            shouldAttack = false;
+            targetToAttack = null;
+        }
+    }
+
+    private void performAttackChecks() {
+        if (isNull()) return;
+        LivingEntity target = findAttackTarget();
+        if (target == null) return;
+
+        if (mc.player.isUsingItem()) {
+            handleShieldUnblock();
             return;
         }
 
-        if (trackedTarget != target) {
-            trackedTarget = target;
+        shouldAttack = true;
+        targetToAttack = target;
+    }
+
+    private LivingEntity findAttackTarget() {
+        boolean attackPressed = InputHandler.isBindDown(mc.options.keyAttack);
+        LivingEntity target = getCrosshairTarget();
+        if (target == null) {
+            resetValidTarget();
+            return null;
+        }
+
+        if (!TargetUtils.isTargetAllowed(target)) {
+            resetValidTarget();
+            return null;
+        }
+
+        LivingEntity resolvedTarget = TargetUtils.resolveTarget(target);
+        if (resolvedTarget == null || resolvedTarget != target) {
+            resetValidTarget();
+            return null;
+        }
+
+        if (!hasValidTarget) {
+            hasValidTarget = true;
             reactionTimer.reset();
         }
-        if (target.isDeadOrDying() || !target.isAlive()) return;
-        if (hurtTimeCheck.getValue() && HurtTickHandler.isCurrentlyHurt(target)) return;
-        if (!attackShieldedTargets.getValue() && target.isBlocking()) return;
-        if (requireClick.getValue() && !InputHandler.isBindDown(mc.options.keyAttack)) return;
-        if (!isAllowedItem()) return;
-        if (!reactionTimer.hasReached(reactionDelay.getValue())) return;
-        if (!attackTimer.hasReached(attackDelay.getValue())) return;
-        if (lastAttackTick == mc.player.tickCount || !canAttackNow(target)) return;
+
+        if (hurtTimeCheck.getValue() && HurtTickHandler.isCurrentlyHurt(target)) {
+            return null;
+        }
+        if (target.isDeadOrDying() || !target.isAlive()) {
+            return null;
+        }
+        if (target.isBlocking() && !attackShieldedTargets.getValue()) {
+            return null;
+        }
+        if (requireClick.getValue() && !attackPressed) {
+            return null;
+        }
+        if (!isAllowedWeapon()) {
+            return null;
+        }
+
+        double cooldownRequired = attackCooldown.getRandom() / 100.0;
+        if (CombatUtils.canCrit() && !critMode.is(Concat.of("None"))) {
+            cooldownRequired = critCooldown.getRandom() / 100.0;
+        }
+        if (mc.player.getAttackStrengthScale((float) cooldownRequired) < cooldownRequired) {
+            return null;
+        }
+
+        if (!reactionTimer.hasReached(reactionDelay.getValue())) {
+            return null;
+        }
+        if (!attackTimer.hasReached(attackDelay.getValue())) {
+            return null;
+        }
+        if (lastAttackTick == mc.player.tickCount) {
+            return null;
+        }
+        if (!canPerformCrit(target)) {
+            return null;
+        }
+
+        return target;
+    }
+
+    private LivingEntity getCrosshairTarget() {
+        LivingEntity hitResultTarget = getHitResultTarget();
+        if (hitResultTarget != null) {
+            return hitResultTarget;
+        }
+
+        LivingEntity target = CombatUtils.getCurrentItemCrosshairTarget(mc.player);
+        if (target != null) {
+            return target;
+        }
+
+        return null;
+    }
+
+    private LivingEntity getHitResultTarget() {
+        HitResult hitResult = mc.hitResult;
+        if (!(hitResult instanceof EntityHitResult entityHitResult)) {
+            return null;
+        }
+
+        if (!(entityHitResult.getEntity() instanceof LivingEntity livingTarget)) {
+            return null;
+        }
+
+        if (!livingTarget.isAlive() || livingTarget.isRemoved()) {
+            return null;
+        }
+
+        return livingTarget;
+    }
+
+    private void executeAttack(LivingEntity target) {
+        if (target == null || mc.player == null) return;
 
         mc.hitResult = new EntityHitResult(target);
         mc.crosshairPickEntity = target;
+        
         InputHandler.simulateClick(mc.options.keyAttack, clickSimulation.getValue());
         attackTimer.reset();
         lastAttackTick = mc.player.tickCount;
-    }
 
-    private LivingEntity crosshairTarget() {
-        if (!(mc.hitResult instanceof EntityHitResult hit) || hit.getType() != HitResult.Type.ENTITY) return null;
-        return hit.getEntity() instanceof LivingEntity living ? living : null;
+        handleShieldReblock();
     }
-
-    private boolean canAttackNow(LivingEntity target) {
-        float required = attackCooldown.getRandom() / 100.0F;
-        boolean withinCritRange = mc.player.distanceTo(target) >= critRange.getMinValue()
-                && mc.player.distanceTo(target) <= critRange.getMaxValue();
-        if (withinCritRange && !critMode.is("None") && CombatUtils.canCrit()) {
-            required = critCooldown.getRandom() / 100.0F;
+    
+    private void resetValidTarget() {
+        if (hasValidTarget) {
+            reactionTimer.reset();
+            hasValidTarget = false;
         }
-        if (mc.player.getAttackStrengthScale(required) < required) return false;
-        if (critMode.is("None") || !withinCritRange || CombatUtils.canCrit()) return true;
-        if (requireSpaceToCrit.getValue() && !mc.options.keyJump.isDown()) return false;
-        return mc.player.onGround() || mc.player.isFallFlying() || mc.player.isInWater()
-                || mc.player.onClimbable();
+    }
+    
+    private void handleShieldUnblock() {
+        if (!unshield.getValue() || unblocked) return;
+        if (!PlayerUtils.isPlayerShieldingInOffHand()) return;
+        if (!InputHandler.isBindDown(mc.options.keyUse)) return;
+
+        mc.options.keyUse.setDown(false);
+        unblocked = true;
+        shouldReblockShield = true;
+    }
+    
+    private void handleShieldReblock() {
+        if (!unblocked) {
+            shouldReblockShield = false;
+            return;
+        }
+
+        if (mc.player != null && shouldReblockShield && mc.player.getOffhandItem().getItem() == Items.SHIELD) {
+            mc.options.keyUse.setDown(true);
+        }
+
+        unblocked = false;
+        shouldReblockShield = false;
+    }
+    
+    private boolean checkGroundConditions() {
+        return mc.player.onGround()
+                || mc.player.isFallFlying()
+                || mc.player.isInWater()
+                || mc.player.onClimbable()
+                || (requireSpaceToCrit.getValue() && !mc.options.keyJump.isDown() && !mc.player.onGround())
+                || PlayerIntersectionUtil.isPlayerInWeb()
+                || PlayerIntersectionUtil.isPlayerInSweetBerryBush();
+    }
+    
+    private boolean canPerformCrit(LivingEntity target) {
+        double distance = mc.player.distanceTo(target);
+        float minRange = allowedCritRange.getMinValue();
+        float maxRange = allowedCritRange.getMaxValue();
+        if (distance < minRange || distance > maxRange) {
+            return true;
+        }
+        
+        boolean canAttack = !requireSpaceToCrit.getValue() || !mc.options.keyJump.isDown() || !mc.player.onGround();
+        boolean canCrit = CombatUtils.canCrit();
+        
+        if (critMode.is(Concat.of("pCrit"))) {
+            if (canCrit && pSync.hasReached(0) && !mc.player.isSprinting()) {
+                pSync.reset();
+            } else {
+                canAttack = checkGroundConditions();
+            }
+        } else if (critMode.is(Concat.of("normal"))) {
+            if (canCrit && pSync.hasReached(0)) {
+                pSync.reset();
+            } else {
+                canAttack = checkGroundConditions();
+            }
+        }
+        return canAttack;
     }
 
-    private boolean isAllowedItem() {
+    private boolean isAllowedWeapon() {
         if (itemWhitelist.getSelectedCount() == 0) return true;
-        ItemStack held = InventoryUtils.getMainHandItem();
-        if (held.isEmpty()) return itemWhitelist.isSelected(Items.AIR);
-        return itemWhitelist.isSelected(held.getItem());
+
+        ItemStack mainHand = InventoryUtils.getMainHandItem();
+        if (mainHand.isEmpty()) {
+            return itemWhitelist.isSelected(Items.AIR);
+        }
+
+        return itemWhitelist.isSelected(mainHand.getItem());
     }
 
-    private void resetTarget() {
-        if (trackedTarget == null) return;
-        trackedTarget = null;
-        reactionTimer.reset();
+    @SuppressWarnings("unused")
+    @EventSubscribe
+    private void onPacketRecieve(EventPacketReceive e){
+        if (isNull()) return;
+        Packet<?> packet = e.getPacket();
+        if (packet instanceof ClientboundPlayerPositionPacket
+        || packet instanceof ClientboundRespawnPacket) {
+            targetToAttack = null;
+            shouldAttack = false;
+        }
     }
+
 }
