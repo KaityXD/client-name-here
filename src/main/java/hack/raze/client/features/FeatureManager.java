@@ -4,6 +4,7 @@ package hack.raze.client.features;
 import hack.raze.client.Raze;
 import hack.raze.client.event.EventManager;
 import hack.raze.client.features.impl.combat.AimAssist;
+import hack.raze.client.features.impl.combat.AutoCrystal;
 import hack.raze.client.features.impl.combat.Backtrack;
 import hack.raze.client.features.impl.combat.AutoAnchor;
 import hack.raze.client.features.impl.combat.CrystalAura;
@@ -40,6 +41,7 @@ public class FeatureManager {
         features.add(new ShieldStun());
         features.add(new AimAssist());
         features.add(new CrystalAura());
+        features.add(new AutoCrystal());
         features.add(new AutoAnchor());
         features.add(new SpearLungeModule());
         features.add(new TriggerBot());
