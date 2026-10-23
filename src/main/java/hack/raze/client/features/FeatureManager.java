@@ -14,6 +14,7 @@ import hack.raze.client.features.impl.combat.KillAura;
 import hack.raze.client.features.impl.combat.MaceSwap;
 import hack.raze.client.features.impl.combat.ShieldStun;
 import hack.raze.client.features.impl.movement.StrafeFix;
+import hack.raze.client.features.impl.misc.AutoTotem;
 import hack.raze.client.features.impl.misc.ClickGUI;
 import hack.raze.client.features.impl.utility.HoverTotem;
 import lombok.Getter;
@@ -39,6 +40,7 @@ public class FeatureManager {
         //? if !auth {
         features.add(new ClickGUI());
         features.add(new HoverTotem());
+        features.add(new AutoTotem());
         features.add(new MaceSwap());
         features.add(new ShieldStun());
         features.add(new AimAssist());
