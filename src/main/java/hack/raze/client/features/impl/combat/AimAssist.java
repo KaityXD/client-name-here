@@ -35,6 +35,9 @@ public class AimAssist extends Feature {
     private float lp;
     private long lt = System.nanoTime();
     private float ft = 0.05F;
+    private float residualYaw;
+    private float residualPitch;
+    private LivingEntity lastTarget;
 
     public AimAssist() {
         super(new FeatureInfo("AimAssist", "Smoothly helps you aim at enemies", Category.COMBAT));
@@ -44,6 +47,9 @@ public class AimAssist extends Feature {
     public void onEnable() {
         super.onEnable();
         lt = System.nanoTime();
+        lastTarget = null;
+        residualYaw = 0.0F;
+        residualPitch = 0.0F;
         if (mc.player != null) {
             ly = mc.player.getYRot();
             lp = mc.player.getXRot();
@@ -71,7 +77,15 @@ public class AimAssist extends Feature {
         lp = cp;
 
         LivingEntity t = fd(p);
-        if (t == null) return;
+        if (t == null) {
+            lastTarget = null;
+            resetResidual();
+            return;
+        }
+        if (t != lastTarget) {
+            lastTarget = t;
+            resetResidual();
+        }
 
         if (mm.getValue() && Math.hypot(dy, dp) < 1.0E-4) return;
 
@@ -81,7 +95,10 @@ public class AimAssist extends Feature {
         float ad = (float) Math.hypot(yd, pd);
 
         float hf = fv.getValue() / 2.0F;
-        if (ad > hf) return;
+        if (ad > hf) {
+            resetResidual();
+            return;
+        }
 
         double k = ad / hf;
         float ff = (float) (1.0 - (3.0 * k * k - 2.0 * k * k * k));
@@ -114,8 +131,14 @@ public class AimAssist extends Feature {
         float s = mc.options.sensitivity().get().floatValue() * 0.6F + 0.2F;
         float g = s * s * s * 1.2F;
 
-        float fy = Math.round(sy / g) * g;
-        float fx = Math.round(sx / g) * g;
+        float fy = quantizeYaw(sy, g);
+        float fx;
+        if (ph.getValue()) {
+            fx = quantizePitch(sx, g);
+        } else {
+            residualPitch = 0.0F;
+            fx = 0.0F;
+        }
 
         if (fy != 0.0F) {
             float ny = cy + fy;
@@ -130,6 +153,25 @@ public class AimAssist extends Feature {
 
         p.yRotO = p.getYRot();
         p.xRotO = p.getXRot();
+    }
+
+    private float quantizeYaw(float delta, float step) {
+        residualYaw += delta;
+        float snapped = Math.round(residualYaw / step) * step;
+        residualYaw -= snapped;
+        return snapped;
+    }
+
+    private float quantizePitch(float delta, float step) {
+        residualPitch += delta;
+        float snapped = Math.round(residualPitch / step) * step;
+        residualPitch -= snapped;
+        return snapped;
+    }
+
+    private void resetResidual() {
+        residualYaw = 0.0F;
+        residualPitch = 0.0F;
     }
 
     private LivingEntity fd(LocalPlayer p) {
