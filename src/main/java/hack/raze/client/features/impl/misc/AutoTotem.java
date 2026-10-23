@@ -2,20 +2,32 @@ package hack.raze.client.features.impl.misc;
 
 import hack.raze.client.api.InventoryClickCompat;
 import hack.raze.client.api.InventoryClickType;
+import hack.raze.client.api.MinecraftCompat;
 import hack.raze.client.event.EventSubscribe;
 import hack.raze.client.event.impl.EventSystemUpdate;
 import hack.raze.client.features.Category;
 import hack.raze.client.features.Feature;
 import hack.raze.client.features.FeatureInfo;
+import hack.raze.client.features.settings.impl.BoolSetting;
+import hack.raze.client.features.settings.impl.RangeSetting;
+import net.minecraft.client.gui.screens.inventory.InventoryScreen;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.Items;
 
 /** Keeps a totem in the offhand when one is available in the player's inventory. */
 public final class AutoTotem extends Feature {
     private static final int OFFHAND_SWAP_BUTTON = 40;
-    private static final int RETRY_DELAY_TICKS = 3;
 
-    private int lastSwapTick = Integer.MIN_VALUE;
+    private final BoolSetting inventoryOnly = new BoolSetting("Inventory Only", false);
+    private final BoolSetting randomSlot = new BoolSetting("Random Slot", true);
+    private final RangeSetting delay = new RangeSetting("Delay", 50, 200, 0, 1000, 1, " ms");
+    private final BoolSetting extraRandomization = new BoolSetting("Extra Randomization", true);
+    private final BoolSetting showTotemCount = new BoolSetting("Show Totem Count", false);
+    private final BoolSetting openInventory = new BoolSetting("Open Inventory", true);
+    private final BoolSetting silentOpen = new BoolSetting("Silent Open", false, ignored -> openInventory.getValue());
+
+    private long nextSwapAt;
 
     public AutoTotem() {
         super(new FeatureInfo("AutoTotem", "Automatically equips a totem in the offhand", Category.UTILITY));
@@ -24,15 +36,25 @@ public final class AutoTotem extends Feature {
     @Override
     public void onEnable() {
         super.onEnable();
-        lastSwapTick = Integer.MIN_VALUE;
+        nextSwapAt = 0L;
     }
 
     @EventSubscribe
     private void onUpdate(EventSystemUpdate event) {
         if (!event.shouldRunGameTick() || isNull() || mc.gameMode == null) return;
-        if (lastSwapTick != Integer.MIN_VALUE
-                && mc.player.tickCount - lastSwapTick < RETRY_DELAY_TICKS) return;
         if (mc.player.getOffhandItem().is(Items.TOTEM_OF_UNDYING)) return;
+        if (System.currentTimeMillis() < nextSwapAt) return;
+
+        boolean inventoryScreenOpen = MinecraftCompat.getScreen() instanceof InventoryScreen;
+        if (inventoryOnly.getValue() && !inventoryScreenOpen) return;
+
+        if (!inventoryScreenOpen && openInventory.getValue() && !silentOpen.getValue()) {
+            // Open only when no other screen is active; never replace a chest or another UI.
+            if (MinecraftCompat.getScreen() != null) return;
+            MinecraftCompat.setScreen(new InventoryScreen(mc.player));
+            return;
+        }
+        if (!inventoryScreenOpen && !openInventory.getValue() && !silentOpen.getValue()) return;
 
         // Don't send inventory clicks against a chest, crafting menu, or other open container.
         if (mc.player.containerMenu != mc.player.inventoryMenu) return;
@@ -48,17 +70,36 @@ public final class AutoTotem extends Feature {
                 InventoryClickType.SWAP,
                 mc.player
         );
-        lastSwapTick = mc.player.tickCount;
+        long wait = Math.max(0L, (long) delay.getRandom());
+        if (extraRandomization.getValue()) wait += (long) (Math.random() * 180.0);
+        nextSwapAt = System.currentTimeMillis() + wait;
+    }
+
+    @Override
+    public String getInfo() {
+        if (!showTotemCount.getValue() || isNull()) return "";
+        int count = mc.player.getOffhandItem().is(Items.TOTEM_OF_UNDYING)
+                ? mc.player.getOffhandItem().getCount() : 0;
+        for (int slot = 0; slot < 36; slot++) {
+            ItemStack stack = mc.player.getInventory().getItem(slot);
+            if (stack.is(Items.TOTEM_OF_UNDYING)) count += stack.getCount();
+        }
+        return Integer.toString(count);
     }
 
     private int findTotemSlot(Inventory inventory) {
-        // Prefer the main inventory so the active hotbar slot is left alone.
+        int[] candidates = new int[36];
+        int count = 0;
+        // Prefer main inventory slots, preserving hotbar items where possible.
         for (int slot = 9; slot < 36; slot++) {
-            if (inventory.getItem(slot).is(Items.TOTEM_OF_UNDYING)) return slot;
+            if (inventory.getItem(slot).is(Items.TOTEM_OF_UNDYING)) candidates[count++] = slot;
         }
-        for (int slot = 0; slot < 9; slot++) {
-            if (inventory.getItem(slot).is(Items.TOTEM_OF_UNDYING)) return slot;
+        if (count == 0) {
+            for (int slot = 0; slot < 9; slot++) {
+                if (inventory.getItem(slot).is(Items.TOTEM_OF_UNDYING)) candidates[count++] = slot;
+            }
         }
-        return -1;
+        if (count == 0) return -1;
+        return candidates[randomSlot.getValue() ? (int) (Math.random() * count) : 0];
     }
 }
