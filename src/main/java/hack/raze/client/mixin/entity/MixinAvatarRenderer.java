@@ -16,7 +16,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(AvatarRenderer.class)
 public class MixinAvatarRenderer {
 
-    // Head rotation supporting silent aim
+    // Third-person silent aim: head looks at the sent rotation, body follows it
+    // (vanilla head-turn dynamics) instead of rotating as one unit
     @Inject(method = "extractRenderState", at = @At("TAIL"))
     private void raze$applyServerHeadRotation(Avatar player, AvatarRenderState state, float tickProgress, CallbackInfo ci) {
         if (Raze.isDestroyed) return;
@@ -28,12 +29,12 @@ public class MixinAvatarRenderer {
         if (perspective.isFirstPerson()) return;
         if (!RotationHandler.isHasSilentRotation()) return;
 
-        float serverYaw = RotationHandler.getRenderYaw();
-        float serverPitch = RotationHandler.getRenderPitch();
+        float headRot = RotationHandler.getRenderYaw();
+        float bodyRot = RotationHandler.getRenderBodyYaw();
 
-        state.bodyRot = serverYaw;
-        state.yRot = 0.0F;
-        state.xRot = Mth.clamp(serverPitch, -90.0f, 90.0f);
+        state.bodyRot = bodyRot;
+        state.yRot = Mth.wrapDegrees(headRot - bodyRot);
+        state.xRot = Mth.clamp(RotationHandler.getRenderPitch(), -90.0f, 90.0f);
     }
 
 

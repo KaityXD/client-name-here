@@ -266,13 +266,21 @@ public final class RotationUtils implements Imports {
         float delta = getDeltaSeconds();
         float speedMultiplier = scaleSpeed ? (silent ? 2.5f : 0.5f) : 1.0f;
 
-        lastRotations[0] = lerpAngle(lastRotations[0], clientRot[0], delta, yawSpeed * speedMultiplier);
-        lastRotations[1] = lerpAngle(lastRotations[1], clientRot[1], delta, pitchSpeed * speedMultiplier);
+        float[] lerped = new float[]{
+                lerpAngle(lastRotations[0], clientRot[0], delta, yawSpeed * speedMultiplier),
+                lerpAngle(lastRotations[1], clientRot[1], delta, pitchSpeed * speedMultiplier)
+        };
 
-        float yawDiff = Math.abs(Mth.wrapDegrees(lastRotations[0] - clientRot[0]));
-        float pitchDiff = Math.abs(lastRotations[1] - clientRot[1]);
+        float yawDiff = Math.abs(Mth.wrapDegrees(lerped[0] - clientRot[0]));
+        float pitchDiff = Math.abs(lerped[1] - clientRot[1]);
 
         if (yawDiff < 1.0f && pitchDiff < 1.0f) {
+            // Final step: land exactly on the camera rotation. Camera rotations are
+            // produced by the mouse pipeline itself, so no GCD re-snap is needed for
+            // the last packet.
+            lastRotations[0] = clientRot[0];
+            lastRotations[1] = clientRot[1];
+            if (silent) applySilentRotations(lastRotations);
             RotationHandler.syncToPlayer(mc.player.getYRot(), mc.player.getXRot());
             lastSentRotations[0] = mc.player.getYRot();
             lastSentRotations[1] = mc.player.getXRot();
@@ -282,6 +290,12 @@ public final class RotationUtils implements Imports {
             currentPriority = EventSubscribe.Priority.LOWEST;
             return false;
         }
+
+        // Route the transition through the same GCD pipeline as the aim path so
+        // intermediate silent deltas stay on the mouse rotation ladder (this is what
+        // actually prevents the AimModulo360 flag on the rotate-back phase; the old
+        // code sent raw un-snapped lerp deltas here).
+        lastRotations = getFixedRotations(lastRotations, lerped);
 
         if (silent) applySilentRotations(lastRotations);
         return true;
@@ -331,6 +345,8 @@ public final class RotationUtils implements Imports {
             // Intentionally uses FPS-based delta for rapid convergence loop
             float delta = 1.0f / Math.max(1f, mc.getFps());
 
+            int iterations = 0;
+            int maxIterations = 1 + (int) (660.0f / Math.max(0.5f, yawSpeed)) * 3;
             while (true) {
                 lastRotations[0] = lerpAngle(lastRotations[0], clientRot[0], delta, yawSpeed);
                 lastRotations[1] = lerpAngle(lastRotations[1], clientRot[1], delta, pitchSpeed);
@@ -339,7 +355,7 @@ public final class RotationUtils implements Imports {
                 float yawDiff = Math.abs(Mth.wrapDegrees(lastRotations[0] - clientRot[0]));
                 float pitchDiff = Math.abs(lastRotations[1] - clientRot[1]);
 
-                if (yawDiff < 1.0f && pitchDiff < 1.0f) {
+                if (yawDiff < 1.0f && pitchDiff < 1.0f || ++iterations >= maxIterations) {
                     action.run();
                     break;
                 }

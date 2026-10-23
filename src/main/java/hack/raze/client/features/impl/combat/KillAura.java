@@ -2,6 +2,7 @@ package hack.raze.client.features.impl.combat;
 
 import hack.raze.client.api.ScreenCompat;
 import hack.raze.client.event.EventSubscribe;
+import hack.raze.client.event.impl.EventHandleInput;
 import hack.raze.client.event.impl.EventMove;
 import hack.raze.client.event.impl.EventSystemUpdate;
 import hack.raze.client.features.Category;
@@ -80,7 +81,10 @@ public class KillAura extends Feature {
         if (tg == null) tg = fd(p);
 
         if (tg == null) {
-            if (RotationUtils.isControlledBy(this)) RotationUtils.cleanup(this, true);
+            if (RotationUtils.isControlledBy(this)) {
+                RotationUtils.cleanup(this, true, sp.getValue() * 15.0F, sp.getValue() * 15.0F,
+                        RotationUtils.AimType.REGULAR, true);
+            }
             return;
         }
 
@@ -88,6 +92,17 @@ public class KillAura extends Feature {
             tg = null;
             return;
         }
+    }
+
+    // Attacks run in the vanilla attack phase (inside the game tick, right before the
+    // movement packet), otherwise the interact/swing packets can land after the tick-end
+    // packet and get flagged as "post"
+    @EventSubscribe
+    private void onHandleInputTick(EventHandleInput.Early e) {
+        if (!isEnabled() || isNull() || ScreenCompat.hasScreen(mc)) return;
+
+        LocalPlayer p = mc.player;
+        if (tg == null || !RotationUtils.isControlledBy(this)) return;
 
         if (!ck(p, tg)) return;
         if (!tm(p)) return;

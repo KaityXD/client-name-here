@@ -11,6 +11,7 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.player.LocalPlayer;
+import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.MoverType;
 import net.minecraft.world.phys.Vec3;
@@ -276,5 +277,26 @@ public abstract class MixinLocalPlayer extends AbstractClientPlayer {
         if (event.cancelled) {
             ci.cancel();
         }
+    }
+
+    // applyInput runs inside aiStep, i.e. inside the window where features like
+    // StrafeFix replace the player rotation with the silent server rotation. Its
+    // yBob/xBob EMWA feeds the first-person hand wobble in ItemInHandRenderer, so
+    // without this shield the held item visibly tilts toward the silent rotation.
+    // Restore the camera rotation around it, then re-apply the swap.
+    @Inject(method = "applyInput", at = @At("HEAD"))
+    private void raze$applyInputRestoreCamera(CallbackInfo ci) {
+        if (Raze.isDestroyed) return;
+        if (!RotationHandler.isHasViewSwap() || !RotationHandler.isHasSilentRotation()) return;
+        this.setYRot(RotationHandler.getViewSwapOrigYaw());
+        this.setXRot(RotationHandler.getViewSwapOrigPitch());
+    }
+
+    @Inject(method = "applyInput", at = @At("RETURN"))
+    private void raze$applyInputReapplySwap(CallbackInfo ci) {
+        if (Raze.isDestroyed) return;
+        if (!RotationHandler.isHasViewSwap() || !RotationHandler.isHasSilentRotation()) return;
+        this.setYRot(RotationHandler.getServerYaw());
+        this.setXRot(Mth.clamp(RotationHandler.getServerPitch(), -90.0F, 90.0F));
     }
 }

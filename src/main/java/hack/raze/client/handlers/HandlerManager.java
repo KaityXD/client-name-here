@@ -25,6 +25,7 @@ public class HandlerManager {
         
         handlers.add(new KeyHandler());
         handlers.add(new HurtTickHandler());
+        handlers.add(new RotationRenderHandler());
         handlers.add(new SprintController());
         handlers.add(new SwapStateManager());
         handlers.add(new CommandHandler());
