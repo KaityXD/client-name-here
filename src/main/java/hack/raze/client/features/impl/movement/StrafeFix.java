@@ -37,6 +37,7 @@ public class StrafeFix extends Feature {
         }
         swapped = false;
         corrected = false;
+        RotationHandler.setHasViewSwap(false);
     }
 
     @EventSubscribe
@@ -47,6 +48,7 @@ public class StrafeFix extends Feature {
         }
         swapped = false;
         corrected = false;
+        RotationHandler.setHasViewSwap(false);
 
         if (!isEnabled() || isNull()) return;
         if (!RotationHandler.isHasSilentRotation()) return;
@@ -71,6 +73,9 @@ public class StrafeFix extends Feature {
         swapped = true;
         p.setYRot(RotationHandler.getServerYaw());
         p.setXRot(Mth.clamp(RotationHandler.getServerPitch(), -90.0F, 90.0F));
+        RotationHandler.setViewSwapOrigYaw(svy);
+        RotationHandler.setViewSwapOrigPitch(svp);
+        RotationHandler.setHasViewSwap(true);
 
         if (md.is("Silent")) {
             float r = (float) Math.toRadians(-dy);
@@ -102,6 +107,7 @@ public class StrafeFix extends Feature {
             mc.player.setYRot(svy);
             mc.player.setXRot(svp);
             swapped = false;
+            RotationHandler.setHasViewSwap(false);
         }
     }
 }
