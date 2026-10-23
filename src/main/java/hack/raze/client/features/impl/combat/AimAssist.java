@@ -29,6 +29,8 @@ public class AimAssist extends Feature {
     private final BoolSetting ph = new BoolSetting("Aim Pitch", true);
     private final BoolSetting mm = new BoolSetting("On Mouse Move", true);
     private final ModeSetting ap = new ModeSetting("Aim Point", "Dynamic", "Dynamic", "Head", "Center", "Closest");
+
+    // TODO: add lerp linear aiming type shit i dont fucking know dude i never do this fucking type of math someone fucking help me please
     private final BoolSetting mb = new BoolSetting("Mobs", false);
 
     private float ly;

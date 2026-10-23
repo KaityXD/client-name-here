@@ -68,6 +68,8 @@ import java.util.List;
  *     newly appeared target, so it never runs on a perfect metronome.</li>
  * </ul>
  */
+
+ // TODO: remove this ai ass comment by dylen wtf???
 public class CrystalAura extends Feature {
 
     public CrystalAura() {
