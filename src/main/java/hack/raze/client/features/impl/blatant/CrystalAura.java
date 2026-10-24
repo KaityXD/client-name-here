@@ -1,4 +1,4 @@
-package hack.raze.client.features.impl.combat;
+package hack.raze.client.features.impl.blatant;
 
 import hack.raze.client.api.AttackRangeCompat;
 import hack.raze.client.api.MinecraftCompat;
@@ -76,7 +76,7 @@ public class CrystalAura extends Feature {
         super(new FeatureInfo(
             Concat.of("Crystal Aura"),
             Concat.of("Giving aura to user and fight with the jews"),
-            Category.COMBAT
+            Category.BLATANT
         ));
         itemWhitelist.setSelected(Items.END_CRYSTAL, true);
     }

@@ -1,4 +1,4 @@
-package hack.raze.client.features.impl.combat;
+package hack.raze.client.features.impl.blatant;
 
 import hack.raze.client.api.ScreenCompat;
 import hack.raze.client.event.EventSubscribe;
@@ -44,7 +44,7 @@ public class KillAura extends Feature {
     private double ndl;
 
     public KillAura() {
-        super(new FeatureInfo("KillAura", "Automatically attacks nearby targets", Category.COMBAT));
+        super(new FeatureInfo("KillAura", "Automatically attacks nearby targets", Category.BLATANT));
     }
 
     @Override
