@@ -32,8 +32,10 @@ public final class AutoTotem extends Feature {
     private final BoolSetting showTotemCount = new BoolSetting("Show Totem Count", false);
     private final BoolSetting openInventory = new BoolSetting("Open Inventory", true);
     private final BoolSetting silentOpen = new BoolSetting("Silent Open", false, ignored -> openInventory.getValue());
+    private final BoolSetting autoClose = new BoolSetting("Auto Close", true, ignored -> openInventory.getValue());
 
     private long nextSwapAt;
+    private boolean forcedOpen;
 
     public AutoTotem() {
         super(new FeatureInfo("AutoTotem", "Automatically equips a totem in the offhand and a chosen hotbar slot", Category.UTILITY));
@@ -43,6 +45,13 @@ public final class AutoTotem extends Feature {
     public void onEnable() {
         super.onEnable();
         nextSwapAt = 0L;
+        forcedOpen = false;
+    }
+
+    @Override
+    public void onDisable() {
+        super.onDisable();
+        forcedOpen = false;
     }
 
     @EventSubscribe
@@ -51,8 +60,15 @@ public final class AutoTotem extends Feature {
 
         int hotbarTarget = hotbarSlot.getValue() - 1;
         boolean inventoryScreenOpen = MinecraftCompat.getScreen() instanceof InventoryScreen;
+        if (!inventoryScreenOpen) forcedOpen = false;
         if (inventoryScreenOpen) selectHotbarSlot(hotbarTarget);
 
+        handleTotem(hotbarTarget, inventoryScreenOpen);
+
+        if (inventoryScreenOpen) maybeAutoClose(hotbarTarget);
+    }
+
+    private void handleTotem(int hotbarTarget, boolean inventoryScreenOpen) {
         if (System.currentTimeMillis() < nextSwapAt) return;
 
         boolean needOffhand = !mc.player.getOffhandItem().is(Items.TOTEM_OF_UNDYING);
@@ -65,6 +81,7 @@ public final class AutoTotem extends Feature {
         if (!inventoryScreenOpen && openInventory.getValue() && !silentOpen.getValue()) {
             // Open only when no other screen is active; never replace a chest or another UI.
             if (MinecraftCompat.getScreen() != null) return;
+            forcedOpen = true;
             MinecraftCompat.setScreen(new InventoryScreen(mc.player));
             return;
         }
@@ -89,6 +106,21 @@ public final class AutoTotem extends Feature {
         long wait = Math.max(0L, (long) delay.getRandom());
         if (extraRandomization.getValue()) wait += (long) (Math.random() * 180.0);
         nextSwapAt = System.currentTimeMillis() + wait;
+    }
+
+    private void maybeAutoClose(int hotbarTarget) {
+        if (!autoClose.getValue() || !forcedOpen) return;
+
+        boolean needOffhand = !mc.player.getOffhandItem().is(Items.TOTEM_OF_UNDYING);
+        boolean needHotbar = Hotbar.getValue()
+                && !mc.player.getInventory().getItem(hotbarTarget).is(Items.TOTEM_OF_UNDYING);
+        if (needOffhand || needHotbar) {
+            int target = needOffhand ? -1 : hotbarTarget;
+            if (findTotemSlot(mc.player.getInventory(), target) >= 0) return;
+        }
+
+        forcedOpen = false;
+        mc.player.closeContainer();
     }
 
     private void selectHotbarSlot(int slot) {
