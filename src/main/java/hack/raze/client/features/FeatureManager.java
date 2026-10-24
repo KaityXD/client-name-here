@@ -17,6 +17,7 @@ import hack.raze.client.features.impl.movement.StrafeFix;
 import hack.raze.client.features.impl.misc.AutoTotem;
 import hack.raze.client.features.impl.misc.ClickGUI;
 import hack.raze.client.features.impl.utility.HoverTotem;
+import hack.raze.client.features.impl.utility.JumpReset;
 import lombok.Getter;
 
 import java.util.*;
@@ -40,6 +41,7 @@ public class FeatureManager {
         //? if !auth {
         features.add(new ClickGUI());
         features.add(new HoverTotem());
+        features.add(new JumpReset());
         features.add(new AutoTotem());
         features.add(new MaceSwap());
         features.add(new ShieldStun());

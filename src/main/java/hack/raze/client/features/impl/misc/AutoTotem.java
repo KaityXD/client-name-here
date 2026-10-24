@@ -9,6 +9,7 @@ import hack.raze.client.features.Category;
 import hack.raze.client.features.Feature;
 import hack.raze.client.features.FeatureInfo;
 import hack.raze.client.features.settings.impl.BoolSetting;
+import hack.raze.client.features.settings.impl.IntSetting;
 import hack.raze.client.features.settings.impl.RangeSetting;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.world.item.ItemStack;
@@ -21,6 +22,8 @@ public final class AutoTotem extends Feature {
 
     private final BoolSetting inventoryOnly = new BoolSetting("Inventory Only", false);
     private final BoolSetting randomSlot = new BoolSetting("Random Slot", true);
+    private final BoolSetting Hotbar = new BoolSetting("Hotbar", true);
+    private final IntSetting hotbarSlot = new IntSetting("Hotbar Slot", 1, 1, 9, ignored -> Hotbar.getValue());
     private final RangeSetting delay = new RangeSetting("Delay", 50, 200, 0, 1000, 1, " ms");
     private final BoolSetting extraRandomization = new BoolSetting("Extra Randomization", true);
     private final BoolSetting showTotemCount = new BoolSetting("Show Totem Count", false);
@@ -30,7 +33,7 @@ public final class AutoTotem extends Feature {
     private long nextSwapAt;
 
     public AutoTotem() {
-        super(new FeatureInfo("AutoTotem", "Automatically equips a totem in the offhand", Category.UTILITY));
+        super(new FeatureInfo("AutoTotem", "Automatically equips a totem in the offhand and a chosen hotbar slot", Category.UTILITY));
     }
 
     @Override
@@ -42,8 +45,13 @@ public final class AutoTotem extends Feature {
     @EventSubscribe
     private void onUpdate(EventSystemUpdate event) {
         if (!event.shouldRunGameTick() || isNull() || mc.gameMode == null) return;
-        if (mc.player.getOffhandItem().is(Items.TOTEM_OF_UNDYING)) return;
         if (System.currentTimeMillis() < nextSwapAt) return;
+
+        boolean needOffhand = !mc.player.getOffhandItem().is(Items.TOTEM_OF_UNDYING);
+        int hotbarTarget = hotbarSlot.getValue() - 1;
+        boolean needHotbar = Hotbar.getValue()
+                && !mc.player.getInventory().getItem(hotbarTarget).is(Items.TOTEM_OF_UNDYING);
+        if (!needOffhand && !needHotbar) return;
 
         boolean inventoryScreenOpen = MinecraftCompat.getScreen() instanceof InventoryScreen;
         if (inventoryOnly.getValue() && !inventoryScreenOpen) return;
@@ -59,14 +67,16 @@ public final class AutoTotem extends Feature {
         // Don't send inventory clicks against a chest, crafting menu, or other open container.
         if (mc.player.containerMenu != mc.player.inventoryMenu) return;
 
-        int inventorySlot = findTotemSlot(mc.player.getInventory());
+        int targetSlot = needOffhand ? -1 : hotbarTarget;
+        int inventorySlot = findTotemSlot(mc.player.getInventory(), targetSlot);
         if (inventorySlot < 0) return;
 
         int menuSlot = inventorySlot < 9 ? inventorySlot + 36 : inventorySlot;
+        int button = needOffhand ? OFFHAND_SWAP_BUTTON : hotbarTarget;
         InventoryClickCompat.handleClick(
                 mc.player.inventoryMenu.containerId,
                 menuSlot,
-                OFFHAND_SWAP_BUTTON,
+                button,
                 InventoryClickType.SWAP,
                 mc.player
         );
@@ -87,16 +97,16 @@ public final class AutoTotem extends Feature {
         return Integer.toString(count);
     }
 
-    private int findTotemSlot(Inventory inventory) {
+    private int findTotemSlot(Inventory inventory, int exclude) {
         int[] candidates = new int[36];
         int count = 0;
         // Prefer main inventory slots, preserving hotbar items where possible.
         for (int slot = 9; slot < 36; slot++) {
-            if (inventory.getItem(slot).is(Items.TOTEM_OF_UNDYING)) candidates[count++] = slot;
+            if (slot != exclude && inventory.getItem(slot).is(Items.TOTEM_OF_UNDYING)) candidates[count++] = slot;
         }
         if (count == 0) {
             for (int slot = 0; slot < 9; slot++) {
-                if (inventory.getItem(slot).is(Items.TOTEM_OF_UNDYING)) candidates[count++] = slot;
+                if (slot != exclude && inventory.getItem(slot).is(Items.TOTEM_OF_UNDYING)) candidates[count++] = slot;
             }
         }
         if (count == 0) return -1;
