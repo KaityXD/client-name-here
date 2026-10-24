@@ -4,6 +4,7 @@ import com.mojang.blaze3d.platform.InputConstants;
 import hack.raze.client.api.MinecraftCompat;
 import hack.raze.client.event.EventSubscribe;
 import hack.raze.client.event.impl.EventClientPlayerTick;
+import hack.raze.client.event.impl.EventStartUseItem;
 import hack.raze.client.features.Category;
 import hack.raze.client.features.Feature;
 import hack.raze.client.features.FeatureInfo;
@@ -79,6 +80,7 @@ public class AnchorMacro extends Feature {
     private int placeTimeout;
     private int noAimTicks;
     private final List<Player> deadPlayers = new ArrayList<>();
+    private boolean selfUse;
 
     public AnchorMacro() {
         super(new FeatureInfo(
@@ -228,7 +230,7 @@ public class AnchorMacro extends Feature {
                     }
                     BlockPos expectedPos = mc.level.getBlockState(hitPos).canBeReplaced() ? hitPos : hitPos.relative(hit.getDirection());
                     if (waitForFireClear(expectedPos)) return;
-                    ((MinecraftAccessor) mc).invokeStartUseItem();
+                    startUse();
                     placedAnchorPos = expectedPos;
                     placeTimeout = 0;
                     chargedGlowstone = false;
@@ -301,7 +303,7 @@ public class AnchorMacro extends Feature {
                 }
                 BlockPos expectedPos = mc.level.getBlockState(hitPos).canBeReplaced() ? hitPos : hitPos.relative(hit.getDirection());
                 if (waitForFireClear(expectedPos)) return;
-                ((MinecraftAccessor) mc).invokeStartUseItem();
+                startUse();
                 placedAnchorPos = expectedPos;
                 placeTimeout = 0;
                 latchWaitTicks = 0;
@@ -358,7 +360,7 @@ public class AnchorMacro extends Feature {
                 glowstoneCounter = 0;
 
                 if (aimOnTarget(targetPos)) {
-                    ((MinecraftAccessor) mc).invokeStartUseItem();
+                    startUse();
                     chargedGlowstone = true;
                     chargeTimeout = 0;
                 }
@@ -388,8 +390,8 @@ public class AnchorMacro extends Feature {
                     }
                     explodeCounter = 0;
                     if (aimOnTarget(targetPos)) {
-                        ((MinecraftAccessor) mc).invokeStartUseItem();
-                        ((MinecraftAccessor) mc).invokeStartUseItem();
+                        startUse();
+                        startUse();
                     }
                     currentDoubleAnchorCount = nextCount;
                     exploded = true;
@@ -409,7 +411,7 @@ public class AnchorMacro extends Feature {
                     }
                     explodeCounter = 0;
                     if (aimOnTarget(targetPos)) {
-                        ((MinecraftAccessor) mc).invokeStartUseItem();
+                        startUse();
                     }
                     exploded = true;
                     currentDoubleAnchorCount = 0;
@@ -434,7 +436,7 @@ public class AnchorMacro extends Feature {
                 }
                 explodeCounter = 0;
                 if (aimOnTarget(targetPos)) {
-                    ((MinecraftAccessor) mc).invokeStartUseItem();
+                    startUse();
                 }
                 exploded = true;
                 if (switchBack.getValue()) {
@@ -442,6 +444,30 @@ public class AnchorMacro extends Feature {
                     switchBackCounter = 0;
                 }
             }
+        }
+    }
+
+    @EventSubscribe
+    private void onStartUseItem(EventStartUseItem.Pre event) {
+        if (selfUse) return;
+        if (event.getPlayer() != mc.player) return;
+        if (event.getHand() != InteractionHand.MAIN_HAND) return;
+        if (MinecraftCompat.getScreen() != null || activateKey.isListening() || placeKey.isListening()) return;
+        if (!keyUseIsActivateKey()) return;
+        if (!InputHandler.isBindDown(activateKey.getKey()) && !activateLatched) return;
+        if (!(event.getHitResult() instanceof BlockHitResult hit)) return;
+        if (!mc.level.getBlockState(hit.getBlockPos()).is(Blocks.RESPAWN_ANCHOR)) return;
+
+        // Vanilla would place the held anchor onto the anchor's face instead of charging it.
+        event.cancel();
+    }
+
+    private void startUse() {
+        selfUse = true;
+        try {
+            ((MinecraftAccessor) mc).invokeStartUseItem();
+        } finally {
+            selfUse = false;
         }
     }
 

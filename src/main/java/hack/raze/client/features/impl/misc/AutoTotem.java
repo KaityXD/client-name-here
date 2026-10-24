@@ -19,6 +19,9 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.Items;
 
 /** Keeps a totem in the offhand when one is available in the player's inventory. */
+
+
+//TODO: make auto switch swich the same tick when open the inventory and make the delay effect the hotbar slot totem too dylen?
 public final class AutoTotem extends Feature {
     private static final int OFFHAND_SWAP_BUTTON = 40;
 
@@ -32,10 +35,12 @@ public final class AutoTotem extends Feature {
     private final BoolSetting showTotemCount = new BoolSetting("Show Totem Count", false);
     private final BoolSetting openInventory = new BoolSetting("Open Inventory", true);
     private final BoolSetting silentOpen = new BoolSetting("Silent Open", false, ignored -> openInventory.getValue());
-    private final BoolSetting autoClose = new BoolSetting("Auto Close", true, ignored -> openInventory.getValue());
+    private final BoolSetting autoClose = new BoolSetting("Auto Close", false, ignored -> openInventory.getValue());
 
     private long nextSwapAt;
     private boolean forcedOpen;
+    private boolean wasInventoryOpen;
+    private int pendingSwitchSlot = -1;
 
     public AutoTotem() {
         super(new FeatureInfo("AutoTotem", "Automatically equips a totem in the offhand and a chosen hotbar slot", Category.UTILITY));
@@ -46,12 +51,16 @@ public final class AutoTotem extends Feature {
         super.onEnable();
         nextSwapAt = 0L;
         forcedOpen = false;
+        wasInventoryOpen = false;
+        pendingSwitchSlot = -1;
     }
 
     @Override
     public void onDisable() {
         super.onDisable();
         forcedOpen = false;
+        wasInventoryOpen = false;
+        pendingSwitchSlot = -1;
     }
 
     @EventSubscribe
@@ -60,8 +69,11 @@ public final class AutoTotem extends Feature {
 
         int hotbarTarget = hotbarSlot.getValue() - 1;
         boolean inventoryScreenOpen = MinecraftCompat.getScreen() instanceof InventoryScreen;
-        if (!inventoryScreenOpen) forcedOpen = false;
-        if (inventoryScreenOpen) selectHotbarSlot(hotbarTarget);
+        if (!inventoryScreenOpen) {
+            if (wasInventoryOpen) applyPendingSwitch();
+            forcedOpen = false;
+        }
+        wasInventoryOpen = inventoryScreenOpen;
 
         handleTotem(hotbarTarget, inventoryScreenOpen);
 
@@ -90,6 +102,10 @@ public final class AutoTotem extends Feature {
         // Don't send inventory clicks against a chest, crafting menu, or other open container.
         if (mc.player.containerMenu != mc.player.inventoryMenu) return;
 
+        if (Switch.getValue() && Hotbar.getValue()) {
+            pendingSwitchSlot = hotbarTarget;
+        }
+
         int targetSlot = needOffhand ? -1 : hotbarTarget;
         int inventorySlot = findTotemSlot(mc.player.getInventory(), targetSlot);
         if (inventorySlot < 0) return;
@@ -109,7 +125,7 @@ public final class AutoTotem extends Feature {
     }
 
     private void maybeAutoClose(int hotbarTarget) {
-        if (!autoClose.getValue() || !forcedOpen) return;
+        if (!autoClose.getValue() || inventoryOnly.getValue() || !forcedOpen) return;
 
         boolean needOffhand = !mc.player.getOffhandItem().is(Items.TOTEM_OF_UNDYING);
         boolean needHotbar = Hotbar.getValue()
@@ -123,12 +139,14 @@ public final class AutoTotem extends Feature {
         mc.player.closeContainer();
     }
 
-    private void selectHotbarSlot(int slot) {
-        if (!Switch.getValue() || !Hotbar.getValue()) return;
-        if (!mc.player.getInventory().getItem(slot).is(Items.TOTEM_OF_UNDYING)) return;
-        if (mc.player.getInventory().getSelectedSlot() == slot) return;
+    private void applyPendingSwitch() {
+        if (pendingSwitchSlot < 0) return;
+        int slot = pendingSwitchSlot;
+        pendingSwitchSlot = -1;
         InventoryUtils.setInvSlot(slot);
-        ((MultiPlayerGameModeAccessor) mc.gameMode).syncSlot();
+        if (mc.gameMode != null) {
+            ((MultiPlayerGameModeAccessor) mc.gameMode).syncSlot();
+        }
     }
 
     @Override

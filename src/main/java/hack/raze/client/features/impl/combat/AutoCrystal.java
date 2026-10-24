@@ -4,7 +4,7 @@ import com.mojang.blaze3d.platform.InputConstants;
 import hack.raze.client.Raze;
 import hack.raze.client.api.ScreenCompat;
 import hack.raze.client.event.EventSubscribe;
-import hack.raze.client.event.impl.EventClientPlayerTick;
+import hack.raze.client.event.impl.EventHandleInput;
 import hack.raze.client.event.impl.EventItemUse;
 import hack.raze.client.event.impl.EventPerformUseItemOn;
 import hack.raze.client.features.Category;
@@ -123,7 +123,7 @@ public final class AutoCrystal extends Feature {
     // -- events --
 
     @EventSubscribe
-    private void onTick(EventClientPlayerTick event) {
+    private void onTick(EventHandleInput.Early event) {
         if (!isEnabled() || isNull()) return;
         if (ScreenCompat.hasScreen(mc)) {
             resetSequence();

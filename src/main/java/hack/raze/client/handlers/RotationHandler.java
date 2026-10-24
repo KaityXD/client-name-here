@@ -180,6 +180,42 @@ public class RotationHandler {
         while (renderBodyYaw - prevRenderBodyYaw >= 180.0F) prevRenderBodyYaw += 360.0F;
     }
 
+    // Per-frame third-person head smoothing. Advanced while rendering (so it runs at
+    // frame rate, not tick rate) using a frame-rate independent exponential factor.
+    // A handful of float ops per frame -- no measurable FPS cost.
+    private static final float FRAME_SMOOTHING = 30.0F;
+    private static final long FRAME_STALE_NANOS = 250_000_000L;
+    private static float frameYaw;
+    private static float framePitch;
+    private static long frameNanos;
+    private static boolean frameInit;
+
+    public static void updateFrameRenderRotations() {
+        long now = System.nanoTime();
+        if (!frameInit || now - frameNanos > FRAME_STALE_NANOS) {
+            frameYaw = serverYaw;
+            framePitch = serverPitch;
+            frameNanos = now;
+            frameInit = true;
+            return;
+        }
+        float dt = (now - frameNanos) / 1.0E9F;
+        frameNanos = now;
+        if (dt <= 0.0F) return;
+        if (dt > 0.1F) dt = 0.1F;
+        float alpha = 1.0F - (float) Math.exp(-FRAME_SMOOTHING * dt);
+        frameYaw += Mth.wrapDegrees(serverYaw - frameYaw) * alpha;
+        framePitch += (serverPitch - framePitch) * alpha;
+    }
+
+    public static float getFrameRenderYaw() {
+        return frameYaw;
+    }
+
+    public static float getFrameRenderPitch() {
+        return framePitch;
+    }
+
     public static void clearRenderBodyYaw() {
         renderBodyYawActive = false;
         renderBodyYaw = 0.0F;
@@ -191,6 +227,7 @@ public class RotationHandler {
         serverDeltaYaw = 0f;
         hasSilentRotation = false;
         renderInitialized = false;
+        frameInit = false;
         clearRenderBodyYaw();
     }
 

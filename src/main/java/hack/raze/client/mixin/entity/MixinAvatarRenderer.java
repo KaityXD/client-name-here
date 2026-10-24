@@ -30,10 +30,12 @@ public class MixinAvatarRenderer {
         if (perspective.isFirstPerson()) return;
         if (!RotationHandler.isHasSilentRotation()) return;
 
+        RotationHandler.updateFrameRenderRotations();
+
         float bodyYaw = Mth.rotLerp(tickProgress, player.yBodyRotO, player.yBodyRot);
         state.bodyRot = bodyYaw;
-        state.yRot = Mth.wrapDegrees(RotationHandler.getServerYaw() - bodyYaw);
-        state.xRot = Mth.clamp(RotationHandler.getServerPitch(), -90.0f, 90.0f);
+        state.yRot = Mth.wrapDegrees(RotationHandler.getFrameRenderYaw() - bodyYaw);
+        state.xRot = Mth.clamp(RotationHandler.getFrameRenderPitch(), -90.0f, 90.0f);
     }
 
 
