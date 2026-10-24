@@ -11,6 +11,8 @@ import hack.raze.client.features.FeatureInfo;
 import hack.raze.client.features.settings.impl.BoolSetting;
 import hack.raze.client.features.settings.impl.IntSetting;
 import hack.raze.client.features.settings.impl.RangeSetting;
+import hack.raze.client.mixin.accessors.MultiPlayerGameModeAccessor;
+import hack.raze.client.utils.inventory.InventoryUtils;
 import net.minecraft.client.gui.screens.inventory.InventoryScreen;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.entity.player.Inventory;
@@ -24,6 +26,7 @@ public final class AutoTotem extends Feature {
     private final BoolSetting randomSlot = new BoolSetting("Random Slot", true);
     private final BoolSetting Hotbar = new BoolSetting("Hotbar", true);
     private final IntSetting hotbarSlot = new IntSetting("Hotbar Slot", 1, 1, 9, ignored -> Hotbar.getValue());
+    private final BoolSetting Switch = new BoolSetting("Auto Switch", true);
     private final RangeSetting delay = new RangeSetting("Delay", 50, 200, 0, 1000, 1, " ms");
     private final BoolSetting extraRandomization = new BoolSetting("Extra Randomization", true);
     private final BoolSetting showTotemCount = new BoolSetting("Show Totem Count", false);
@@ -45,15 +48,18 @@ public final class AutoTotem extends Feature {
     @EventSubscribe
     private void onUpdate(EventSystemUpdate event) {
         if (!event.shouldRunGameTick() || isNull() || mc.gameMode == null) return;
+
+        int hotbarTarget = hotbarSlot.getValue() - 1;
+        boolean inventoryScreenOpen = MinecraftCompat.getScreen() instanceof InventoryScreen;
+        if (inventoryScreenOpen) selectHotbarSlot(hotbarTarget);
+
         if (System.currentTimeMillis() < nextSwapAt) return;
 
         boolean needOffhand = !mc.player.getOffhandItem().is(Items.TOTEM_OF_UNDYING);
-        int hotbarTarget = hotbarSlot.getValue() - 1;
         boolean needHotbar = Hotbar.getValue()
                 && !mc.player.getInventory().getItem(hotbarTarget).is(Items.TOTEM_OF_UNDYING);
         if (!needOffhand && !needHotbar) return;
 
-        boolean inventoryScreenOpen = MinecraftCompat.getScreen() instanceof InventoryScreen;
         if (inventoryOnly.getValue() && !inventoryScreenOpen) return;
 
         if (!inventoryScreenOpen && openInventory.getValue() && !silentOpen.getValue()) {
@@ -83,6 +89,14 @@ public final class AutoTotem extends Feature {
         long wait = Math.max(0L, (long) delay.getRandom());
         if (extraRandomization.getValue()) wait += (long) (Math.random() * 180.0);
         nextSwapAt = System.currentTimeMillis() + wait;
+    }
+
+    private void selectHotbarSlot(int slot) {
+        if (!Switch.getValue() || !Hotbar.getValue()) return;
+        if (!mc.player.getInventory().getItem(slot).is(Items.TOTEM_OF_UNDYING)) return;
+        if (mc.player.getInventory().getSelectedSlot() == slot) return;
+        InventoryUtils.setInvSlot(slot);
+        ((MultiPlayerGameModeAccessor) mc.gameMode).syncSlot();
     }
 
     @Override
