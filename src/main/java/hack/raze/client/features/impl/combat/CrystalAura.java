@@ -75,7 +75,7 @@ public class CrystalAura extends Feature {
     public CrystalAura() {
         super(new FeatureInfo(
             Concat.of("Crystal Aura"),
-            Concat.of("Places, detonates and optimises end crystals"),
+            Concat.of("Giving aura to user and fight with the jews"),
             Category.COMBAT
         ));
         itemWhitelist.setSelected(Items.END_CRYSTAL, true);
